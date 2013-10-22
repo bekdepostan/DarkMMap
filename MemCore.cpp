@@ -1,4 +1,5 @@
 #include "MemCore.h"
+#include <algorithm>
 
 namespace ds_mmap
 {
@@ -663,50 +664,77 @@ namespace ds_mmap
                 Number of found items
 
         */
-        size_t CMemCore::FindPattern( const std::string& sig, const std::string& pattern, void* scanStart, size_t scanSize, std::vector<size_t>& out )
+        size_t CMemCore::FindPattern(const std::string& sig, uint8_t wildcard, void* scanStart, size_t scanSize, std::vector<size_t>& out)
         {
-            bool fullMatch = false;
-            uint8_t *pBuffer = (uint8_t*)VirtualAlloc(NULL, scanSize, MEM_COMMIT, PAGE_READWRITE);
-
             out.clear();
 
-            // Size mismatch
-            if(pattern.length() > sig.length())
-                return 0;
+            uint8_t *pBuffer = (uint8_t*)VirtualAlloc(NULL, scanSize, MEM_COMMIT, PAGE_READWRITE);
 
-            // No arbitrary bytes in mask
-            if(pattern.find('?') == pattern.npos)
-                fullMatch = true;
+            const uint8_t* cstart = (const uint8_t*)pBuffer;
+            const uint8_t* cend = cstart + scanSize;
 
-            if(pBuffer && Read(scanStart, scanSize, pBuffer) == ERROR_SUCCESS)
+            if (pBuffer && Read(scanStart, (DWORD)scanSize, pBuffer) == ERROR_SUCCESS)
             {
-                size_t length = pattern.length();
-
-                //
-                // Scan buffer
-                //
-                for(size_t x = 0; x < scanSize - length; x++ )
+                for (;;)
                 {
-                    bool bMatch = true;
+                    const uint8_t* res = std::search(cstart, cend, sig.begin(), sig.end(),
+                        [&wildcard](uint8_t val1, uint8_t val2){ return (val1 == val2 || val2 == wildcard); });
 
-                    if(fullMatch)
-                        bMatch = (memcmp(sig.data(), pBuffer + x, length) == 0);
-                    else
-                        for(size_t i = 0; i < length; i++)
-                        {
-                            if(pattern[i] == 'x' && ((char*)(pBuffer + x))[i] != sig[i])
-                            {
-                                bMatch = false;
-                                break;
-                            }
-                        }
+                    if (res >= cend)
+                        break;
 
-                    if(bMatch)
-                        out.emplace_back((size_t)scanStart + x);
-                }                
+                    out.emplace_back(res - pBuffer + (size_t)scanStart);
+
+                    cstart = res + sig.length();
+                }
             }
 
-            if(pBuffer)
+            if (pBuffer)
+                VirtualFree(pBuffer, 0, MEM_DECOMMIT);
+
+            return out.size();
+        }
+
+        size_t CMemCore::FindPattern(const std::string& sig, void* scanStart, size_t scanSize, std::vector<size_t>& out)
+        {
+            out.clear();
+
+            uint8_t *pBuffer = (uint8_t*)VirtualAlloc(NULL, scanSize, MEM_COMMIT, PAGE_READWRITE);
+
+            if (pBuffer && Read(scanStart, (DWORD)scanSize, pBuffer) == ERROR_SUCCESS)
+            {
+                size_t bad_char_skip[UCHAR_MAX + 1];
+
+                const uint8_t* haystack = (const uint8_t*)pBuffer;
+                const uint8_t* needle = (const uint8_t*)&sig[0];
+                intptr_t       nlen = sig.length();
+                intptr_t       scan = 0;
+                intptr_t       last = nlen - 1;
+
+                //
+                // Preprocess
+                //
+                for (scan = 0; scan <= UCHAR_MAX; ++scan)
+                    bad_char_skip[scan] = nlen;
+
+                for (scan = 0; scan < last; ++scan)
+                    bad_char_skip[needle[scan]] = last - scan;
+
+                //
+                // Search
+                //
+                while (scanSize >= (size_t)nlen)
+                {
+                    for (scan = last; haystack[scan] == needle[scan]; --scan)
+                    if (scan == 0)
+                        out.emplace_back(haystack - pBuffer + (size_t)scanStart);
+
+                    scanSize -= bad_char_skip[haystack[last]];
+                    haystack += bad_char_skip[haystack[last]];
+                }
+            }
+
+            if (pBuffer)
                 VirtualFree(pBuffer, 0, MEM_DECOMMIT);
 
             return out.size();

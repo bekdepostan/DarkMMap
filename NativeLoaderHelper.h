@@ -203,16 +203,11 @@ namespace ds_mmap
             T* SetNode(T* ptr, void* pModule);
 
             /*
-                Determine if current OS is Win8 and higher
-            */
-            inline bool IsWin8orHigher() const { return (m_verinfo.dwMajorVersion >= 6 && m_verinfo.dwMinorVersion >= 2); }
-
-            /*
             */
             CNtLdr& operator =( const CNtLdr& other );
+
         private:
             CMemCore&       m_memory;                           // Process memory routines
-            OSVERSIONINFO   m_verinfo;                          // OS version info
             size_t          m_LdrpHashTable;                    // LdrpHashTable address
             size_t          m_LdrpModuleIndexBase;              // LdrpModuleIndex address
             size_t          m_LdrpModuleBase;                   // PEB->Ldr->InLoadOrderModuleList address

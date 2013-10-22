@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Windows.h>
+#include "stdafx.h"
 #include <string>
-#include <tchar.h>
+
 
 namespace ds_mmap
 {

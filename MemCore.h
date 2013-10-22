@@ -260,8 +260,8 @@ namespace ds_mmap
                     Number of found items
 
             */
-            size_t FindPattern(const std::string& sig, const std::string& pattern, void* scanStart, size_t scanSize, std::vector<size_t>& out);
-
+            size_t FindPattern(const std::string& sig, uint8_t wildcard, void* scanStart, size_t scanSize, std::vector<size_t>& out);
+            size_t FindPattern(const std::string& sig, void* scanStart, size_t scanSize, std::vector<size_t>& out);
             /*
                 Retrieve process PEB address
 

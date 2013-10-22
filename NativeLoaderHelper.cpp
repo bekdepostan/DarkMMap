@@ -1,5 +1,8 @@
 #include "NativeLoaderHelper.h"
 
+#include <versionhelpers.h>
+#include <chrono>
+
 namespace ds_mmap
 {
     namespace ds_process
@@ -14,7 +17,6 @@ namespace ds_mmap
             , m_RtlInsertInvertedFunctionTable(nullptr)
             , m_LdrpInvertedFunctionTable(nullptr)
         {
-            memset(&m_verinfo, 0x0, sizeof(m_verinfo));
         }
 
         CNtLdr::~CNtLdr(void)
@@ -26,10 +28,6 @@ namespace ds_mmap
         */
         bool CNtLdr::Init()
         {
-            m_verinfo.dwOSVersionInfoSize = sizeof(m_verinfo);
-
-            GetVersionEx(&m_verinfo);
-
             //
             // Dynamic data initialization
             //
@@ -58,7 +56,7 @@ namespace ds_mmap
         bool CNtLdr::CreateNTReference( HMODULE hMod, size_t ImageSize, const std::wstring& DllBaseName, const std::wstring& DllBasePath )
         {
             // Win 8 and higher
-            if(IsWin8orHigher())
+            if(IsWindows8OrGreater())
             {
                 ULONG hash = 0;
                 _LDR_DATA_TABLE_ENTRY_W8 *pEntry = InitW8Node((void*)hMod, ImageSize, DllBaseName, DllBasePath, hash);
@@ -231,7 +229,7 @@ namespace ds_mmap
             if(m_RtlInsertInvertedFunctionTable == nullptr || m_LdrpInvertedFunctionTable == 0)
                 return false;
 
-            if(IsWin8orHigher())
+            if(IsWindows8OrGreater())
                 Entries = (PRTL_INVERTED_FUNCTION_TABLE_ENTRY)GET_FIELD_PTR((RTL_INVERTED_FUNCTION_TABLE8*)&table, Entries);
             else
                 Entries = (PRTL_INVERTED_FUNCTION_TABLE_ENTRY)GET_FIELD_PTR(&table, Entries);
@@ -247,7 +245,7 @@ namespace ds_mmap
 
             ah.GenPrologue();
 
-            if(IsWin8orHigher())
+            if(IsWindows8OrGreater())
                 ah.GenCall(m_RtlInsertInvertedFunctionTable, { (size_t)ModuleBase, ImageSize });
             else
                 ah.GenCall(m_RtlInsertInvertedFunctionTable, { (size_t)m_LdrpInvertedFunctionTable, (size_t)ModuleBase, ImageSize });
@@ -583,7 +581,7 @@ namespace ds_mmap
             ULONG NtdllHashIndex  = 0;
 
             // Win 8 and higher
-            if(IsWin8orHigher())
+            if(IsWindows8OrGreater())
             {
                 // get ntdll entry
                 _LDR_DATA_TABLE_ENTRY_W8 *Ntdll = CONTAINING_RECORD (Ldr->InInitializationOrderModuleList.Flink, _LDR_DATA_TABLE_ENTRY_W8, InInitializationOrderLinks);
@@ -726,19 +724,19 @@ namespace ds_mmap
                 return false;
 
             // Win 8 and later
-            if(IsWin8orHigher())
+            if(IsWindows8OrGreater())
             {
             #ifdef _M_AMD64
                 // LdrpHandleTlsData
                 // 48 8B 79 30 45 8D 66 01
-                m_memory.FindPattern("\x48\x8b\x79\x30\x45\x8d\x66\x01", "xxxxxxxx", pStart, scanSize, foundData);
+                m_memory.FindPattern("\x48\x8b\x79\x30\x45\x8d\x66\x01", pStart, scanSize, foundData);
 
                 if(!foundData.empty())
                     m_LdrpHandleTlsData = (void*)(foundData.front() - 0x49);
             #else
                 // RtlInsertInvertedFunctionTable
                 // 8B FF 55 8B EC 51 51 53 57 8B 7D 08 8D
-                m_memory.FindPattern("\x8b\xff\x55\x8b\xec\x51\x51\x53\x57\x8b\x7d\x08\x8d", "xxxxxxxxxxxxx", pStart, scanSize, foundData);
+                m_memory.FindPattern("\x8b\xff\x55\x8b\xec\x51\x51\x53\x57\x8b\x7d\x08\x8d", pStart, scanSize, foundData);
 
                 if(!foundData.empty())
                 {
@@ -748,7 +746,7 @@ namespace ds_mmap
 
                 // LdrpHandleTlsData
                 // 8B 45 08 89 45 A0
-                m_memory.FindPattern("\x8b\x45\x08\x89\x45\xa0", "xxxxxx", pStart, scanSize, foundData);
+                m_memory.FindPattern("\x8b\x45\x08\x89\x45\xa0", pStart, scanSize, foundData);
 
                 if(!foundData.empty())
                     m_LdrpHandleTlsData = (void*)(foundData.front() - 0xC);
@@ -762,28 +760,28 @@ namespace ds_mmap
             #ifdef _M_AMD64
                 // LdrpHandleTlsData
                 // 41 B8 09 00 00 00 48 8D 44 24 38
-                m_memory.FindPattern(std::string("\x41\xb8\x09\x00\x00\x00\x48\x8d\x44\x24\x38", 11), "xxxxxxxxxxx", pStart, scanSize, foundData);
+                m_memory.FindPattern(std::string("\x41\xb8\x09\x00\x00\x00\x48\x8d\x44\x24\x38", 11), pStart, scanSize, foundData);
 
                 if(!foundData.empty())
                     m_LdrpHandleTlsData = (void*)(foundData.front() - 0x27);              
             #else
                 // RtlInsertInvertedFunctionTable
                 // 8B FF 55 8B EC 56 68
-                m_memory.FindPattern("\x8b\xff\x55\x8b\xec\x56\x68", "xxxxxxx", pStart, scanSize, foundData);
+                m_memory.FindPattern("\x8b\xff\x55\x8b\xec\x56\x68", pStart, scanSize, foundData);
 
                 if(!foundData.empty())
                     m_RtlInsertInvertedFunctionTable = (void*)foundData.front();
 
                 // RtlLookupFunctionTable + 0x11
                 // 89 5D E0 38
-                m_memory.FindPattern("\x89\x5D\xE0\x38", "xxxx", pStart, scanSize, foundData);
+                m_memory.FindPattern("\x89\x5D\xE0\x38", pStart, scanSize, foundData);
                 
                 if(!foundData.empty())
                     m_LdrpInvertedFunctionTable = (*(void**)(foundData.front() + 0x1B));
 
                 // LdrpHandleTlsData
                 // 74 20 8D 45 D4 50 6A 09 
-                m_memory.FindPattern("\x74\x20\x8d\x45\xd4\x50\x6a\x09", "xxxxxxxx", pStart, scanSize, foundData);
+                m_memory.FindPattern("\x74\x20\x8d\x45\xd4\x50\x6a\x09", pStart, scanSize, foundData);
 
                 if(!foundData.empty())
                     m_LdrpHandleTlsData = (void*)(foundData.front() - 0x14);

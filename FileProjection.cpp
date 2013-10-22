@@ -40,13 +40,13 @@ namespace ds_mmap
         act.cbSize          = sizeof(act);
         act.dwFlags         = ACTCTX_FLAG_RESOURCE_NAME_VALID;
         act.lpSource        = path.c_str();
-        act.lpResourceName  = MAKEINTRESOURCE(2);
+        act.lpResourceName  = MAKEINTRESOURCEW(2);
 
         m_hctx = CreateActCtx(&act);
 
         if(m_hctx == INVALID_HANDLE_VALUE)
         {
-            act.lpResourceName  = MAKEINTRESOURCE(1);
+            act.lpResourceName  = MAKEINTRESOURCEW(1);
             m_hctx = CreateActCtx(&act);
         }
 
